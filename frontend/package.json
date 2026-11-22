@@ -1,0 +1,18 @@
+{
+  "name": "campusone-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "check": "node --check src/main.js && node --check src/api.js",
+    "test:e2e": "node test_e2e.js",
+    "test:api": "node test_live_api_e2e.js"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.65.1",
+    "vite": "^6.3.5"
+  }
+}

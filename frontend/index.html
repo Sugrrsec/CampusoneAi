@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="theme-color" content="#f6f2ea" />
+<title>CampusOne AI</title>
+<link rel="stylesheet" href="/src/styles.css" />
+</head>
+<body>
+<!-- The logo is a bespoke abstract C + pathway mark, not an external asset. -->
+<template id="logo-template"><svg class="logo" viewBox="0 0 40 40" aria-hidden="true"><circle class="ring" cx="20" cy="20" r="16.7" stroke-dasharray="89 22" transform="rotate(-34 20 20)"/><path class="path" d="M26.1 12.4c-5.3-3.6-13.1.6-13.1 7.6s7.8 11.2 13.1 7.6"/><path class="path" d="M18.8 20h12"/><circle class="leaf" cx="32" cy="20" r="2.5"/></svg></template>
+<section id="entry" aria-label="Welcome to CampusOne">
+  <div class="entry-art"><div class="texture"></div><div class="drawings">
+    <svg class="sketch top" viewBox="0 0 420 430" aria-hidden="true"><path class="wash" d="M148 39C218 5 348 61 367 149s-52 165-146 191S71 278 73 194 88 75 148 39Z"/><path class="trace" d="M110 142c51-72 160-95 213-31 51 62 9 160-60 203-63 40-157 5-184-68-21-58 16-157 83-188 64-30 160 2 185 68"/><path class="trace" style="animation-delay:.5s" d="M143 170c27-30 62-31 87-5s34 70 3 89c-29 18-63-2-70-29-8-28 22-67 60-64 41 4 60 38 61 70"/><path class="trace" style="animation-delay:.25s" d="M23 310c54-36 98-8 140 18 44 27 93 17 135-8"/><path class="trace" style="animation-delay:.65s" d="M315 57l15-13m-4 30 20-1m-35-39 0-18"/><circle cx="330" cy="347" r="5"/><path d="m45 75 12 13m-12 0 12-13"/></svg>
+    <svg class="sketch bottom" viewBox="0 0 450 330" aria-hidden="true"><path class="trace" style="animation-delay:.3s" d="M21 183c100-109 160 89 252-28C361 44 382 119 435 72"/><path class="trace" style="animation-delay:.75s" d="M15 206c96-102 158 87 252-24 91-110 114-34 170-88"/><path class="trace" style="animation-delay:1s" d="M30 230c98-105 167 80 254-34 80-104 105-38 146-74"/><ellipse class="trace" cx="127" cy="104" rx="72" ry="36" transform="rotate(-27 127 104)"/><ellipse class="trace" cx="127" cy="104" rx="35" ry="72" transform="rotate(-27 127 104)"/></svg>
+    <svg class="sketch star" viewBox="0 0 100 100" aria-hidden="true"><path class="trace" d="M50 6c7 30 14 37 44 44-30 7-37 14-44 44-7-30-14-37-44-44 30-7 37-14 44-44Z"/><circle cx="50" cy="50" r="11"/></svg><span class="dash"></span></div>
+    <div class="entry-top"><div class="wordmark" data-logo><span class="wordmark-title"><span class="capital">C</span><span class="flow">ampusOne</span><small>.ai</small></span></div><span class="micro">A space to ask</span></div>
+    <div class="hero-hello"><div class="welcome-caption">Your campus companion</div><div class="hello-line serif" aria-label="hello."><span class="letter">h</span><span class="letter">e</span><span class="letter">l</span><span class="letter">l</span><span class="letter">o</span><span class="period">.</span></div><p>One thoughtful place for the questions that come up in university life.</p></div>
+    <div class="entry-bottom"><span>Made for curious minds.</span><span>EST. 2026 &nbsp; / &nbsp; DESIGN STUDY</span></div>
+  </div>
+  <div class="entry-form-area"><div class="login-card"><div class="tag">Welcome in</div><h2 class="serif">A little less searching.<br/><em>A lot more clarity.</em></h2><p>Step inside your own campus desk. Ask a question, pick up a conversation, or start something new.</p><form id="entry-form"><label class="label" for="name">What should we call you?</label><input class="login-field" id="name" placeholder="Your first name" maxlength="32" autocomplete="given-name"/><button class="login-action" type="submit">Continue to CampusOne <svg viewBox="0 0 24 24" class="icon" stroke="currentColor"><path d="M4 12h16m-6-6 6 6-6 6"/></svg></button></form><div class="entry-note">No password needed for this design preview.<br/>Chats are saved locally in this browser, not on a server.</div></div><div class="entry-footer">CampusOne / Interface exploration 06</div></div>
+</section>
+<div id="opening" role="status" aria-live="polite" aria-label="Welcome to CampusOne">
+ <div class="opening-wrap">
+  <div class="opening-sub">a note for you</div>
+  <svg class="handwriting" viewBox="0 0 740 245" role="img" aria-label="Welcome, written slowly by hand">
+   <!-- Each letter is a separate continuous pen stroke, revealed along its actual path. -->
+   <g transform="translate(0 0)">
+    <path class="hand-path" d="M 54 103 C 60 138 68 175 81 176 C 96 177 112 139 119 111 C 119 142 126 178 141 176 C 156 174 171 135 181 112"/>
+    <path class="hand-path thin" d="M 185 149 C 211 152 237 135 222 120 C 206 107 185 128 185 150 C 186 179 224 181 245 148"/>
+    <path class="hand-path" d="M 253 155 C 273 110 287 66 277 55 C 266 42 257 83 257 108 C 256 147 247 177 263 177 C 278 179 293 157 301 148"/>
+    <path class="hand-path" d="M 349 132 C 332 111 305 124 301 150 C 298 177 331 188 357 158"/>
+    <path class="hand-path" d="M 401 135 C 387 113 363 127 365 154 C 367 178 392 183 405 158 C 415 138 401 117 390 127 C 380 138 396 152 426 146"/>
+    <path class="hand-path" d="M 430 150 C 438 135 438 129 442 131 C 450 138 436 177 448 177 C 460 177 473 128 488 129 C 506 129 484 177 498 177 C 510 177 524 128 540 130 C 555 130 542 181 563 177 C 575 176 587 159 596 150"/>
+    <path class="hand-path thin" d="M 593 151 C 624 152 646 135 629 121 C 614 109 594 128 593 149 C 591 181 631 183 657 151"/>
+    <path class="hand-path" d="M 683 171 Q 686 171 686 174"/>
+   </g>
+  </svg>
+  <div class="opening-caption" id="opening-caption">A little space for your questions.</div>
+ </div>
+ <div class="opening-note">CampusOne · Student desk</div>
+</div>
+<section id="app" class="hidden" aria-label="CampusOne chat">
+ <div id="overlay" class="overlay"></div>
+ <aside id="sidebar" class="sidebar"><div class="sidebar-logo wordmark" data-logo><span class="wordmark-title"><span class="capital">C</span><span class="flow">ampusOne</span><small>.ai</small></span></div>
+  <button id="new-chat" class="new-chat"><span>New conversation</span><svg class="icon" viewBox="0 0 24 24"><path d="M12 4v16M4 12h16"/></svg></button>
+  <div class="sidebar-section">Explore</div><div class="side-nav"><button class="navitem selected" id="assistant-nav"><svg class="icon" viewBox="0 0 24 24"><path d="M4 5h16v13H8l-4 3V5Z"/></svg>Assistant</button></div>
+  <div class="sidebar-section">Your conversations <span id="count">0</span></div><div class="history-card"><input id="history-search" class="history-search" type="search" placeholder="Search your chats..." aria-label="Search saved conversations"/><div id="history-list" class="history-list"></div></div>
+  <div class="sidebar-section">Knowledge areas</div><div class="side-nav"><button class="navitem" data-topic="What are the rules for makeup examinations?"><svg class="icon" viewBox="0 0 24 24"><path d="M5 4h14v16H5zM9 8h6M9 12h6"/></svg>Academics</button><button class="navitem" data-topic="How can I get help with campus Wi-Fi?"><svg class="icon" viewBox="0 0 24 24"><path d="M3 9c5-5 13-5 18 0M6 13c3-3 9-3 12 0M9 17c2-2 4-2 6 0"/><circle cx="12" cy="20" r="1"/></svg>IT support</button><button class="navitem" data-topic="Where can I find fee information?"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/></svg>Fees</button><button class="navitem" data-topic="What campus facilities are available?"><svg class="icon" viewBox="0 0 24 24"><path d="M3 21h18M6 21V7l6-4 6 4v14M9 11h6M9 15h6"/></svg>Facilities</button></div>
+  <div class="side-spacer"></div><div class="profile"><div id="avatar" class="avatar">G</div><div class="profile-text"><b id="profile-name">Guest</b><small>Local preview account</small></div><button id="signout" class="icon-button" title="Back to welcome screen" aria-label="Back to welcome"><svg class="icon" viewBox="0 0 24 24"><path d="M10 17l5-5-5-5M15 12H3M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7"/></svg></button></div>
+ </aside>
+ <div class="workspace"><header class="topbar"><div class="topname"><button class="icon-button mobile-menu" id="menu" aria-label="Open menu"><svg class="icon" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button><span id="chat-heading">Campus Assistant</span></div><div class="topmeta"><span>01 / STUDENT DESK</span> <span>● Preview mode</span></div></header>
+  <main id="scroll" class="chat-scroller"><div class="chat-inner"><div id="welcome" class="empty-chat"><div class="hero-emblem" data-logo-only></div><h2 class="serif" id="greeting">Curiosity looks good <em>on you.</em></h2><p>Where shall we begin?</p><div class="prompts"><button class="prompt" data-question="What are the rules for makeup examinations?"><small>ACADEMICS</small><strong>What are the rules for makeup examinations?</strong></button><button class="prompt" data-question="How is CGPA calculated?"><small>ACADEMICS</small><strong>How is CGPA calculated?</strong></button><button class="prompt" data-question="How can I get help with campus Wi-Fi?"><small>IT SUPPORT</small><strong>How can I get help with campus Wi-Fi?</strong></button><button class="prompt" data-question="Where can I find fee information?"><small>FEES</small><strong>Where can I find fee information?</strong></button></div></div><div class="messages" id="messages" aria-live="polite"></div></div></main>
+  <div class="composer-shell"><div class="composer-inner"><form class="composer" id="chat-form"><textarea id="message-input" placeholder="Ask about campus..." rows="1" maxlength="2000" aria-label="Enter a question"></textarea><button type="submit" class="send" aria-label="Send"><svg class="icon" viewBox="0 0 24 24"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button></form><div class="fineprint">Design preview · Illustrative replies only · Not connected to university systems</div></div></div>
+ </div>
+</section>
+<div id="toast" class="toast" role="status"></div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
