@@ -51,9 +51,15 @@ class EmbeddingService:
                         torch.set_num_interop_threads(1)
                     except Exception:
                         pass
-                    from sentence_transformers import SentenceTransformer
-
-                    self._model = SentenceTransformer(self.model_name)
+                    try:
+                        from sentence_transformers import SentenceTransformer
+                        self._model = SentenceTransformer(self.model_name)
+                    except ImportError as exc:
+                        raise ImportError(
+                            "sentence-transformers is not installed. "
+                            "CampusOne AI uses lightweight BM25 retrieval for production deployment. "
+                            "Install 'sentence-transformers' only if you need embedding generation."
+                        ) from exc
 
     @property
     def is_loaded(self) -> bool:

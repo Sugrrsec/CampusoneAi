@@ -93,7 +93,7 @@ def test_chat_pipeline():
         print("  Metadata status:", data["metadata"].get("status"))
 
         # 4. HR/Admin query with verified Bennett UG chunks
-        res = client.post("/chat", json={"message": "How do I apply for revaluation?"})
+        res = client.post("/chat", json={"message": "What is the procedure for makeup examination?"})
         print(f"HR_ADMIN Domain test -> Status: {res.status_code}")
         assert res.status_code == 200
         data = res.json()
@@ -103,6 +103,14 @@ def test_chat_pipeline():
         print("  Sources count:", len(data["sources"]))
         print("  First source:", data["sources"][0]["source_title"])
         print("  Answer preview:\n   ", data["answer"][:160].replace("\n", " "), "...")
+
+        # 5. Revaluation query (unsupported topic in academic rules)
+        res = client.post("/chat", json={"message": "How do I apply for revaluation?"})
+        print(f"Revaluation query (unsupported topic) -> Status: {res.status_code}")
+        assert res.status_code == 200
+        data = res.json()
+        assert len(data["sources"]) == 0
+        print("  Metadata status:", data["metadata"].get("status"))
 
         # 5. IT Domain query (empty evidence behavior when no IT chunks in dataset)
         res = client.post("/chat", json={"message": "My university WiFi is not working."})

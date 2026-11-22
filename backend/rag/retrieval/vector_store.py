@@ -4,8 +4,15 @@ import json
 from pathlib import Path
 from typing import Any, Sequence
 
-import faiss
-import numpy as np
+try:
+    import faiss
+except ImportError:
+    faiss = None
+
+try:
+    import numpy as np
+except ImportError:
+    np = None
 
 
 class FaissVectorStore:
@@ -21,6 +28,12 @@ class FaissVectorStore:
     """
 
     def __init__(self, dimension: int) -> None:
+        if faiss is None or np is None:
+            raise ImportError(
+                "faiss-cpu or numpy is not installed. "
+                "Install with 'pip install faiss-cpu numpy' to use FaissVectorStore."
+            )
+
         if dimension <= 0:
             raise ValueError("Embedding dimension must be greater than 0.")
 
@@ -145,6 +158,12 @@ class FaissVectorStore:
         Save FAISS index and metadata to disk.
         """
 
+        if faiss is None or np is None:
+            raise ImportError(
+                "faiss-cpu or numpy is not installed. "
+                "Install with 'pip install faiss-cpu numpy' to use FaissVectorStore."
+            )
+
         directory = Path(directory)
         directory.mkdir(
             parents=True,
@@ -181,6 +200,12 @@ class FaissVectorStore:
         """
         Load a previously saved FAISS vector store.
         """
+
+        if faiss is None or np is None:
+            raise ImportError(
+                "faiss-cpu or numpy is not installed. "
+                "Install with 'pip install faiss-cpu numpy' to use FaissVectorStore."
+            )
 
         directory = Path(directory)
 

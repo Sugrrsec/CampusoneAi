@@ -149,13 +149,17 @@ def normalize_sources(
                 )
             )
 
+            chunk_score = retrieved.get("score")
+            if chunk_score is not None and chunk_score > 1.0:
+                chunk_score = round(min(chunk_score / 15.0, 1.0), 4)
+
             normalized.append(
                 SourceReference(
                     chunk_id=chunk_id,
                     domain=domain,
                     source_title=retrieved_title,
                     page=retrieved_page,
-                    score=retrieved.get("score"),
+                    score=chunk_score,
                     source_url=retrieved_url,
                 )
             )

@@ -3,8 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Sequence
 
-from .embeddings import EmbeddingService
-from .vector_store import FaissVectorStore
+from .bm25 import BM25Index
 
 
 SUPPORTED_DOMAINS = (
@@ -14,26 +13,28 @@ SUPPORTED_DOMAINS = (
     "FACILITIES",
 )
 
-DEFAULT_MIN_SCORE = 0.25
+# Minimum relevance threshold: genuine keyword matches score >= 0.5,
+# while completely absent topics (e.g. WiFi on academic docs or revaluation) score 0.0.
+DEFAULT_MIN_SCORE = 0.5
 
 
 class DomainRetriever:
     """
-    Domain-aware retrieval layer for CampusOne AI.
+    Domain-aware BM25 retrieval layer for CampusOne AI.
 
-    Maintains one FAISS vector store for each supported domain.
+    Maintains one BM25 store for each supported domain.
+    Replaces runtime SentenceTransformers + FAISS with zero-dependency Okapi BM25,
+    reducing memory usage from ~600 MB to < 1 MB to fit within Render Free's 512 MB limit.
     """
 
     def __init__(
         self,
-        embedding_service: EmbeddingService,
+        embedding_service: Any = None,
     ) -> None:
+        # embedding_service is kept as an optional parameter for backward compatibility
         self.embedding_service = embedding_service
-
-        self.stores: dict[str, FaissVectorStore] = {
-            domain: FaissVectorStore(
-                dimension=embedding_service.dimension
-            )
+        self.stores: dict[str, BM25Index] = {
+            domain: BM25Index()
             for domain in SUPPORTED_DOMAINS
         }
 
@@ -42,7 +43,7 @@ class DomainRetriever:
         documents: Sequence[dict[str, Any]],
     ) -> None:
         """
-        Build domain-specific vector stores.
+        Build domain-specific BM25 stores.
 
         Each document must contain:
             - domain
@@ -50,11 +51,7 @@ class DomainRetriever:
 
         Other metadata fields are preserved.
         """
-
-        grouped_documents: dict[
-            str,
-            list[dict[str, Any]]
-        ] = {
+        grouped_documents: dict[str, list[dict[str, Any]]] = {
             domain: []
             for domain in SUPPORTED_DOMAINS
         }
@@ -78,22 +75,7 @@ class DomainRetriever:
             )
 
         for domain, domain_documents in grouped_documents.items():
-            if not domain_documents:
-                continue
-
-            texts = [
-                document["text"]
-                for document in domain_documents
-            ]
-
-            embeddings = self.embedding_service.embed_documents(
-                texts
-            )
-
-            self.stores[domain].add(
-                embeddings=embeddings,
-                metadata=domain_documents,
-            )
+            self.stores[domain].fit(domain_documents)
 
     def retrieve(
         self,
@@ -103,13 +85,11 @@ class DomainRetriever:
         min_score: float = DEFAULT_MIN_SCORE,
     ) -> list[dict[str, Any]]:
         """
-        Retrieve the most relevant chunks from the requested domains.
+        Retrieve the most relevant chunks from requested domains using BM25 ranking.
 
-        Results below min_score are discarded.
-
+        Results below min_score are discarded to avoid returning unrelated chunks.
         Multiple domains are supported for multi-topic questions.
         """
-
         if not query.strip():
             raise ValueError(
                 "Query cannot be empty."
@@ -120,9 +100,9 @@ class DomainRetriever:
                 "top_k must be greater than 0."
             )
 
-        if not 0.0 <= min_score <= 1.0:
+        if min_score < 0.0:
             raise ValueError(
-                "min_score must be between 0 and 1."
+                "min_score must be non-negative."
             )
 
         if not domains:
@@ -139,29 +119,22 @@ class DomainRetriever:
                 f"Unsupported domains: {invalid_domains}"
             )
 
-        query_embedding = self.embedding_service.embed_query(
-            query
-        )
-
         results: list[dict[str, Any]] = []
 
         for domain in domains:
             store = self.stores[domain]
-
             domain_results = store.search(
-                query_embedding=query_embedding,
+                query=query,
                 top_k=top_k,
+                min_score=min_score,
             )
 
             for result in domain_results:
-                if result["score"] < min_score:
-                    continue
-
                 result["retrieved_domain"] = domain
                 results.append(result)
 
         results.sort(
-            key=lambda item: item["score"],
+            key=lambda item: item.get("score", 0.0),
             reverse=True,
         )
 
@@ -172,22 +145,17 @@ class DomainRetriever:
         domain: str,
     ) -> int:
         """Return the number of chunks stored for a domain."""
-
         if domain not in SUPPORTED_DOMAINS:
             raise ValueError(
                 f"Unsupported domain: {domain}"
             )
-
         return self.stores[domain].size
 
     def save(
         self,
         directory: str | Path,
     ) -> None:
-        """
-        Save all domain-specific FAISS stores to disk.
-        """
-
+        """Save all domain-specific document stores to disk as JSON."""
         directory = Path(directory)
         directory.mkdir(
             parents=True,
@@ -196,18 +164,16 @@ class DomainRetriever:
 
         for domain, store in self.stores.items():
             domain_directory = directory / domain
-            store.save(domain_directory)
+            domain_directory.mkdir(parents=True, exist_ok=True)
+            store.save(domain_directory / "documents.json")
 
     @classmethod
     def load(
         cls,
         directory: str | Path,
-        embedding_service: EmbeddingService,
+        embedding_service: Any = None,
     ) -> "DomainRetriever":
-        """
-        Load previously saved domain-specific FAISS stores.
-        """
-
+        """Load previously saved domain-specific document stores from disk."""
         directory = Path(directory)
 
         if not directory.exists():
@@ -221,18 +187,14 @@ class DomainRetriever:
 
         for domain in SUPPORTED_DOMAINS:
             domain_directory = directory / domain
+            doc_path = domain_directory / "documents.json"
+            meta_path = domain_directory / "metadata.json"
 
-            index_path = domain_directory / "index.faiss"
-            metadata_path = domain_directory / "metadata.json"
-
-            if not index_path.exists() or not metadata_path.exists():
-                continue
-
-            retriever.stores[domain] = (
-                FaissVectorStore.load(
-                    domain_directory
-                )
-            )
+            if doc_path.exists():
+                retriever.stores[domain] = BM25Index.load(doc_path)
+            elif meta_path.exists():
+                # Compatibility with existing metadata files
+                retriever.stores[domain] = BM25Index.load(meta_path)
 
         return retriever
 

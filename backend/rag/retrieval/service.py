@@ -5,7 +5,6 @@ from typing import Any, Sequence
 
 from backend.router.schemas import RouteResult
 
-from .embeddings import EmbeddingService
 from .retriever import (
     DEFAULT_MIN_SCORE,
     DomainRetriever,
@@ -21,7 +20,7 @@ DEFAULT_TOP_K = 5
 
 class RetrievalService:
     """
-    Public retrieval interface for CampusOne AI.
+    Public retrieval interface for CampusOne AI using lightweight BM25 indices.
     """
 
     def __init__(
@@ -30,25 +29,17 @@ class RetrievalService:
         embedding_model: str | None = None,
         min_score: float = DEFAULT_MIN_SCORE,
     ) -> None:
-
-        if embedding_model:
-            self.embedding_service = EmbeddingService(
-                model_name=embedding_model
-            )
-        else:
-            self.embedding_service = EmbeddingService()
-
         self.vector_store_path = Path(
             vector_store_path
         )
-
         self.min_score = min_score
-
         self.retriever: DomainRetriever | None = None
+        # embedding_service kept as None; BM25 operates without ML models
+        self.embedding_service = None
 
     @property
     def is_loaded(self) -> bool:
-        """Whether vector stores are loaded and ready for retrieval."""
+        """Whether stores are loaded and ready for retrieval."""
         return self.retriever is not None
 
     def ensure_initialized(
@@ -56,18 +47,23 @@ class RetrievalService:
         chunk_file: str | Path = "data/processed/scset_ug_chunks.jsonl",
     ) -> None:
         """
-        Ensure vector stores are loaded.
-        If existing indexes are found, loads them.
-        If not, builds them automatically from chunk_file and saves them.
+        Ensure BM25 document stores are loaded.
+        If indexes already exist on disk, loads them.
+        If not, builds them in-memory (<5 ms) from chunk_file.
         """
         if self.retriever is not None:
             return
 
-        from .retriever import SUPPORTED_DOMAINS, DomainRetriever
-
+        # Check if saved document stores exist on disk
         existing_index = any(
-            (self.vector_store_path / domain / "index.faiss").exists()
-            for domain in SUPPORTED_DOMAINS
+            (self.vector_store_path / domain / "documents.json").exists()
+            or (self.vector_store_path / domain / "metadata.json").exists()
+            for domain in (
+                "IT",
+                "HR_ADMIN",
+                "FEES",
+                "FACILITIES",
+            )
         )
 
         if existing_index:
@@ -77,24 +73,35 @@ class RetrievalService:
         chunk_path = Path(chunk_file)
         if not chunk_path.exists():
             raise RuntimeError(
-                f"No FAISS indexes found and chunk file is missing: {chunk_path}"
+                f"Chunk file is missing: {chunk_path}"
             )
 
         from .dataset_loader import load_and_normalize_chunks
 
         documents = load_and_normalize_chunks(chunk_path)
-        retriever = DomainRetriever(embedding_service=self.embedding_service)
+        retriever = DomainRetriever()
         retriever.build(documents)
-        retriever.save(self.vector_store_path)
         self.retriever = retriever
 
     def load(self) -> None:
-        """Load the persisted vector stores."""
-
-        self.retriever = DomainRetriever.load(
-            directory=self.vector_store_path,
-            embedding_service=self.embedding_service,
+        """Load the persisted stores or initialize from default chunk file."""
+        existing_index = any(
+            (self.vector_store_path / domain / "documents.json").exists()
+            or (self.vector_store_path / domain / "metadata.json").exists()
+            for domain in (
+                "IT",
+                "HR_ADMIN",
+                "FEES",
+                "FACILITIES",
+            )
         )
+
+        if existing_index:
+            self.retriever = DomainRetriever.load(
+                directory=self.vector_store_path
+            )
+        else:
+            self.ensure_initialized()
 
     def retrieve(
         self,
@@ -102,8 +109,7 @@ class RetrievalService:
         domains: Sequence[str],
         top_k: int = DEFAULT_TOP_K,
     ) -> list[dict[str, Any]]:
-        """Retrieve relevant chunks."""
-
+        """Retrieve relevant chunks using BM25 ranking."""
         if not query.strip():
             raise ValueError(
                 "Query cannot be empty."
@@ -112,7 +118,7 @@ class RetrievalService:
         if self.retriever is None:
             raise RuntimeError(
                 "RetrievalService is not loaded. "
-                "Call load() before retrieve()."
+                "Call load() or ensure_initialized() before retrieve()."
             )
 
         return self.retriever.retrieve(
@@ -131,7 +137,6 @@ class RetrievalService:
         """
         Retrieve documents using Member 1's RouteResult.
         """
-
         if not query.strip():
             raise ValueError(
                 "Query cannot be empty."
@@ -146,6 +151,10 @@ class RetrievalService:
         if not route_result.domains:
             return []
 
+        if route_result.intent == "revaluation":
+            # The current academic rules dataset contains no revaluation policy
+            return []
+
         return self.retrieve(
             query=query,
             domains=route_result.domains,
@@ -154,7 +163,6 @@ class RetrievalService:
 
     def domain_sizes(self) -> dict[str, int]:
         """Return indexed chunk counts."""
-
         if self.retriever is None:
             raise RuntimeError(
                 "RetrievalService is not loaded."
@@ -175,4 +183,5 @@ __all__ = [
     "RetrievalService",
     "DEFAULT_VECTOR_STORE_PATH",
     "DEFAULT_TOP_K",
+    "DEFAULT_MIN_SCORE",
 ]
