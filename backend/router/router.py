@@ -91,15 +91,13 @@ class IntentRouter:
         FACILITIES
     """
 
-    def __init__(self, model: str | None = None) -> None:
-        # Read Groq API key from .env
-        api_key = os.getenv("GROQ_API_KEY")
-
-        if not api_key:
-            raise ValueError(
-                "GROQ_API_KEY is not set. "
-                "Add your Groq API key to the .env file."
-            )
+    def __init__(
+        self,
+        model: str | None = None,
+        api_key: str | None = None,
+    ) -> None:
+        # Read Groq API key from parameter or environment
+        self.api_key = api_key or os.getenv("GROQ_API_KEY")
 
         # Use supplied model or .env model
         self.model = model or os.getenv(
@@ -107,18 +105,20 @@ class IntentRouter:
             "openai/gpt-oss-20b",
         )
 
-        # Create Groq client
-        self.client = Groq(api_key=api_key)
-
         # Build routing system prompt
         self.system_prompt = build_router_prompt()
+
+        # Create Groq client if API key is provided
+        self.client: Groq | None = None
+        if self.api_key:
+            self.client = Groq(api_key=self.api_key)
 
     def route(self, question: str) -> RouteResult:
         """
         Route a student's question to the appropriate domain.
 
         Groq is used first.
-        If Groq fails, the local keyword fallback router is used.
+        If Groq fails or is unconfigured, the local keyword fallback router is used.
         """
 
         question = question.strip()
@@ -136,6 +136,14 @@ class IntentRouter:
                 routing_method="llm",
                 reason="The user submitted an empty message.",
             )
+
+        if not self.client:
+            fallback_result = keyword_route(question)
+            fallback_result.reason = (
+                "Groq routing was unavailable (no API key configured), "
+                "so the local fallback router was used."
+            )
+            return fallback_result
 
         try:
             # Call Groq Chat Completions API

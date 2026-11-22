@@ -46,6 +46,48 @@ class RetrievalService:
 
         self.retriever: DomainRetriever | None = None
 
+    @property
+    def is_loaded(self) -> bool:
+        """Whether vector stores are loaded and ready for retrieval."""
+        return self.retriever is not None
+
+    def ensure_initialized(
+        self,
+        chunk_file: str | Path = "data/processed/scset_ug_chunks.jsonl",
+    ) -> None:
+        """
+        Ensure vector stores are loaded.
+        If existing indexes are found, loads them.
+        If not, builds them automatically from chunk_file and saves them.
+        """
+        if self.retriever is not None:
+            return
+
+        from .retriever import SUPPORTED_DOMAINS, DomainRetriever
+
+        existing_index = any(
+            (self.vector_store_path / domain / "index.faiss").exists()
+            for domain in SUPPORTED_DOMAINS
+        )
+
+        if existing_index:
+            self.load()
+            return
+
+        chunk_path = Path(chunk_file)
+        if not chunk_path.exists():
+            raise RuntimeError(
+                f"No FAISS indexes found and chunk file is missing: {chunk_path}"
+            )
+
+        from .dataset_loader import load_and_normalize_chunks
+
+        documents = load_and_normalize_chunks(chunk_path)
+        retriever = DomainRetriever(embedding_service=self.embedding_service)
+        retriever.build(documents)
+        retriever.save(self.vector_store_path)
+        self.retriever = retriever
+
     def load(self) -> None:
         """Load the persisted vector stores."""
 

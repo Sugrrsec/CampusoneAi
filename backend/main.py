@@ -1,20 +1,35 @@
 from __future__ import annotations
 
-import os
+import asyncio
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from groq import RateLimitError
 
-from backend.agents.groq_agent import GroqDomainAgent
-from backend.rag.retrieval.service import RetrievalService
-from backend.router.router import IntentRouter
+from backend.rag.retrieval.retriever import SUPPORTED_DOMAINS
 from backend.schemas.api import (
     ChatRequest,
     ChatResponse,
     SourceReference,
 )
+from backend.services.ai_manager import ai_service_manager
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    FastAPI lifespan manager.
+
+    Kicks off AI service warmup as an asynchronous background task so Uvicorn
+    can bind to Render's $PORT in < 200 ms without waiting for PyTorch/FAISS.
+    """
+    init_task = asyncio.create_task(ai_service_manager.initialize())
+    yield
+    if not init_task.done():
+        init_task.cancel()
 
 
 app = FastAPI(
@@ -24,6 +39,7 @@ app = FastAPI(
         "University Student Assistant API"
     ),
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -36,118 +52,22 @@ app.add_middleware(
 
 
 # -------------------------------------------------------------------
-# Core components
+# Core components & backward compatibility
 # -------------------------------------------------------------------
 
-intent_router = IntentRouter()
-
-from pathlib import Path
-
-from backend.rag.retrieval.dataset_loader import (
-    load_and_normalize_chunks,
-)
-from backend.rag.retrieval.retriever import (
-    SUPPORTED_DOMAINS,
-    DomainRetriever,
-)
+retrieval_service = ai_service_manager.retrieval_service
+intent_router = ai_service_manager.intent_router
 
 
-CHUNK_FILE = Path(
-    "data/processed/scset_ug_chunks.jsonl"
-)
-
-VECTOR_STORE_PATH = Path(
-    "data/processed/vector_stores"
-)
-
-
-def initialize_retrieval() -> None:
-    """
-    Load existing FAISS indexes.
-
-    If no indexes exist, build them automatically from
-    Member 2's processed JSONL dataset.
-    """
-
-    existing_index = any(
-        (
-            VECTOR_STORE_PATH
-            / domain
-            / "index.faiss"
-        ).exists()
-        for domain in SUPPORTED_DOMAINS
-    )
-
-    if existing_index:
-        retrieval_service.load()
-        return
-
-    if not CHUNK_FILE.exists():
-        raise RuntimeError(
-            "No FAISS indexes were found and the Member 2 "
-            f"chunk file is missing: {CHUNK_FILE}"
-        )
-
-    documents = load_and_normalize_chunks(
-        CHUNK_FILE
-    )
-
-    retriever = DomainRetriever(
-        embedding_service=(
-            retrieval_service.embedding_service
-        )
-    )
-
-    retriever.build(documents)
-
-    retriever.save(
-        VECTOR_STORE_PATH
-    )
-
-    retrieval_service.retriever = retriever
-
-
-retrieval_service = RetrievalService()
-
-initialize_retrieval()
-
-
-SUPPORTED_DOMAINS = (
-    "IT",
-    "HR_ADMIN",
-    "FEES",
-    "FACILITIES",
-)
-
-
-def create_domain_agents() -> dict[str, GroqDomainAgent]:
-    """
-    Create one Groq agent for each CampusOne AI domain.
-    """
-
-    api_key = os.getenv("GROQ_API_KEY")
-
-    if not api_key:
-        raise ValueError(
-            "GROQ_API_KEY is not set."
-        )
-
-    model = os.getenv(
-        "GROQ_ROUTER_MODEL",
-        "openai/gpt-oss-20b",
-    )
-
-    return {
-        domain: GroqDomainAgent(
-            domain=domain,
-            api_key=api_key,
-            model=model,
-        )
-        for domain in SUPPORTED_DOMAINS
-    }
-
-
-domain_agents = create_domain_agents()
+def __getattr__(name: str) -> Any:
+    """Allow lazy access to module-level singletons for backward compatibility."""
+    if name == "domain_agents":
+        return ai_service_manager.domain_agents
+    if name == "retrieval_service":
+        return ai_service_manager.retrieval_service
+    if name == "intent_router":
+        return ai_service_manager.intent_router
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
 
 # -------------------------------------------------------------------
@@ -160,7 +80,7 @@ def normalize_sources(
     domain: str,
 ) -> list[SourceReference]:
     """
-    Convert Member 4's agent sources into the common API format.
+    Convert domain agent sources into the common API format.
 
     Only sources that can be matched to actual retrieved knowledge
     are returned.
@@ -293,19 +213,40 @@ def empty_evidence_response(
 
 @app.get("/")
 async def root() -> dict[str, str]:
-    """Basic root endpoint."""
-
+    """Basic root endpoint for liveness."""
     return {
         "message": "CampusOne AI API is running."
     }
 
 
 @app.get("/health")
-async def health() -> dict[str, str]:
-    """Health-check endpoint."""
+async def health(readiness: bool = False) -> Any:
+    """
+    Health-check endpoint.
+
+    Distinguishes basic server liveness from full AI readiness:
+    - Default (readiness=False): Returns HTTP 200 immediately once Uvicorn binds,
+      allowing Render's port scan / liveness check to pass in < 1 second.
+    - readiness=True: Returns HTTP 200 only if AI components are loaded;
+      otherwise returns HTTP 503 for orchestrator readiness gates.
+    """
+    health_data = ai_service_manager.get_health_status()
+    is_ready = ai_service_manager.is_ready
+
+    if readiness and not is_ready:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "initializing",
+                "ready": False,
+                "ai_service": health_data,
+            },
+        )
 
     return {
-        "status": "ok"
+        "status": "ok",
+        "ready": is_ready,
+        "ai_service": health_data,
     }
 
 
@@ -324,20 +265,31 @@ async def chat(
     Main CampusOne AI pipeline.
 
     Flow:
-
+        0. Ensure AI service initialization (waits safely if in progress).
         1. Route question.
         2. Handle clarification/out-of-scope.
         3. Retrieve domain-specific knowledge.
-        4. Send retrieved evidence to domain agent(s).
+        4. Send retrieved evidence to domain agent(s) (with grounded fallback).
         5. Return grounded answer + sources.
     """
 
     try:
         # -----------------------------------------------------------
+        # 0. ENSURE AI INITIALIZATION
+        # -----------------------------------------------------------
+        try:
+            await ai_service_manager.ensure_ready()
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503,
+                detail=f"CampusOne AI service is currently unavailable: {exc}",
+            ) from exc
+
+        # -----------------------------------------------------------
         # 1. MEMBER 1 — ROUTING
         # -----------------------------------------------------------
 
-        route_result = intent_router.route(
+        route_result = ai_service_manager.intent_router.route(
             request.message
         )
 
@@ -400,7 +352,7 @@ async def chat(
         # 4. MEMBER 3 — RETRIEVAL
         # -----------------------------------------------------------
 
-        retrieved_results = retrieval_service.retrieve_for_route(
+        retrieved_results = ai_service_manager.retrieval_service.retrieve_for_route(
             query=request.message,
             route_result=route_result,
             top_k=5,
@@ -433,33 +385,54 @@ async def chat(
             if not domain_results:
                 continue
 
-            agent = domain_agents.get(domain)
+            agent = ai_service_manager.domain_agents.get(domain)
 
-            if agent is None:
-                continue
+            if agent is not None:
+                agent_result = agent.generate_answer(
+                    question=request.message,
+                    retrieved_knowledge=domain_results,
+                    conversation_context=conversation_context,
+                )
+                answer_text = agent_result.answer.strip()
+                agent_conf = agent_result.confidence
+                raw_sources = agent_result.sources
+            else:
+                # Grounded fallback when Groq LLM agent is not configured
+                snippets = [
+                    r.get("text", "").strip()
+                    for r in domain_results
+                    if r.get("text")
+                ]
+                answer_text = (
+                    f"Information regarding {domain}:\n" + "\n\n".join(snippets[:2])
+                    if snippets
+                    else "No specific details found in university records."
+                )
+                agent_conf = 0.8
+                raw_sources = [
+                    {
+                        "document_name": r.get("source_title", ""),
+                        "page": r.get("page"),
+                        "section": None,
+                        "source_url": r.get("source_url"),
+                    }
+                    for r in domain_results
+                ]
 
-            agent_result = agent.generate_answer(
-                question=request.message,
-                retrieved_knowledge=domain_results,
-                conversation_context=conversation_context,
-            )
-
-            if agent_result.answer.strip():
+            if answer_text:
                 if len(route_result.domains) > 1:
                     final_answers.append(
-                        f"{domain}: {agent_result.answer.strip()}"
+                        f"{domain}: {answer_text}"
                     )
                 else:
                     final_answers.append(
-                        agent_result.answer.strip()
+                        answer_text
                     )
 
-            agent_confidences[domain] = (
-                agent_result.confidence
-            )
+            agent_confidences[domain] = agent_conf
 
             normalized = normalize_sources(
-                agent_sources=agent_result.sources,
+                agent_sources=raw_sources,
                 retrieved_knowledge=domain_results,
                 domain=domain,
             )
@@ -534,6 +507,9 @@ async def chat(
                 "provider": "groq",
             },
         )
+
+    except HTTPException:
+        raise
 
     except Exception as exc:
         raise HTTPException(

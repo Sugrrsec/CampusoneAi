@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import threading
 from typing import Sequence
 
 import numpy as np
-from sentence_transformers import SentenceTransformer
 
 
 DEFAULT_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
@@ -14,18 +14,65 @@ class EmbeddingService:
     Creates semantic embeddings for document chunks and user queries.
 
     This is an embedding model, not a conversational LLM.
+    Supports lazy loading to prevent blocking application startup.
     """
 
     def __init__(
         self,
         model_name: str = DEFAULT_EMBEDDING_MODEL,
+        lazy: bool = True,
     ) -> None:
         self.model_name = model_name
-        self.model = SentenceTransformer(model_name)
+        self._model = None
+        self._lock = threading.Lock()
+        if not lazy:
+            self._load_model()
+
+    @property
+    def model(self):
+        """Thread-safe lazy property for the underlying SentenceTransformer."""
+        if self._model is None:
+            self._load_model()
+        return self._model
+
+    @model.setter
+    def model(self, value) -> None:
+        self._model = value
+
+    def _load_model(self) -> None:
+        if self._model is None:
+            with self._lock:
+                if self._model is None:
+                    try:
+                        import torch
+
+                        # Limit threads on cloud container environments (e.g., Render)
+                        torch.set_num_threads(1)
+                        torch.set_num_interop_threads(1)
+                    except Exception:
+                        pass
+                    from sentence_transformers import SentenceTransformer
+
+                    self._model = SentenceTransformer(self.model_name)
+
+    @property
+    def is_loaded(self) -> bool:
+        """Whether the model weights are currently loaded in memory."""
+        return self._model is not None
 
     @property
     def dimension(self) -> int:
         """Return the size of each generated embedding vector."""
+        if self._model is not None:
+            dimension = self._model.get_embedding_dimension()
+            return int(dimension)
+
+        # Common model dimension shortcuts to avoid eager PyTorch loading
+        if "all-MiniLM-L6-v2" in self.model_name:
+            return 384
+        if "all-mpnet-base-v2" in self.model_name:
+            return 768
+
         dimension = self.model.get_embedding_dimension()
 
         if dimension is None:

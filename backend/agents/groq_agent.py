@@ -371,8 +371,10 @@ Confidence guidelines:
                 "section",
             )
 
-            relevance_score = chunk.get(
-                "score",
+            relevance_score = (
+                chunk.get("score")
+                if chunk.get("score") is not None
+                else chunk.get("relevance_score")
             )
 
             domain = chunk.get(
